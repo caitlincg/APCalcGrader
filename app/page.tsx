@@ -180,7 +180,7 @@ export default function Home() {
           disabled={loading}
           className="w-full rounded-xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-900/30 transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? "Grading…" : "Grade with OpenAI"}
+          {loading ? "Grading…" : "Grade"}
         </button>
       </form>
 
