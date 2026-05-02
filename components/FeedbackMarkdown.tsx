@@ -1,7 +1,9 @@
 "use client";
 
+import { preprocessModelMathForKatex } from "@/lib/preprocessModelMath";
 import "katex/dist/katex.min.css";
 import type { Components } from "react-markdown";
+import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
@@ -64,6 +66,8 @@ const markdownComponents: Components = {
  * Renders model output: Markdown + $inline$ and $$block$$ math via KaTeX (readable sans body, not a monospace slab).
  */
 export function FeedbackMarkdown({ text }: Props) {
+  const processed = useMemo(() => preprocessModelMathForKatex(text), [text]);
+
   return (
     <article className="feedback-shell mt-5 overflow-hidden rounded-2xl border border-slate-700/50 bg-gradient-to-b from-slate-900/90 via-slate-950/95 to-slate-950 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
       <div className="border-b border-slate-700/40 bg-slate-900/50 px-5 py-3">
@@ -75,7 +79,7 @@ export function FeedbackMarkdown({ text }: Props) {
         style={{ fontFamily: "var(--font-sans), ui-sans-serif, system-ui, sans-serif" }}
       >
         <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
-          {text}
+          {processed}
         </ReactMarkdown>
       </div>
     </article>
