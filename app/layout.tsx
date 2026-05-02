@@ -5,6 +5,7 @@ import "./globals.css";
 const dmSans = DM_Sans({
   subsets: ["latin"],
   variable: "--font-sans",
+  display: "swap",
 });
 
 const jetbrains = JetBrains_Mono({
@@ -24,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${dmSans.className} ${jetbrains.variable} antialiased`}>
+      <body className={`${dmSans.variable} ${dmSans.className} ${jetbrains.variable} antialiased`}>
         {children}
       </body>
     </html>
