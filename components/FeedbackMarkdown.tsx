@@ -68,7 +68,7 @@ export function FeedbackMarkdown({ text }: Props) {
     <article className="feedback-shell mt-5 overflow-hidden rounded-2xl border border-slate-700/50 bg-gradient-to-b from-slate-900/90 via-slate-950/95 to-slate-950 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04)]">
       <div className="border-b border-slate-700/40 bg-slate-900/50 px-5 py-3">
         <p className="text-xs font-medium uppercase tracking-widest text-sky-400/90">Scoring report</p>
-        <p className="mt-0.5 text-sm text-slate-500">LaTeX math renders below; scroll wide equations horizontally.</p>
+        <p className="mt-0.5 text-sm text-slate-500">Summary score and rubric walkthrough. LaTeX renders below.</p>
       </div>
       <div
         className="feedback-md px-5 py-6 pb-8 text-slate-200 [&_.katex]:text-slate-100 [&_.katex-display]:my-5 [&_.katex-display]:overflow-x-auto [&_.katex-display]:rounded-xl [&_.katex-display]:border [&_.katex-display]:border-slate-700/40 [&_.katex-display]:bg-slate-950/60 [&_.katex-display]:px-4 [&_.katex-display]:py-3"
