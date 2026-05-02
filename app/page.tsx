@@ -1,6 +1,18 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { prepareImagesForUpload } from "@/lib/prepareImage";
+import { useCallback, useRef, useState } from "react";
+
+function isImageFile(f: File): boolean {
+  if (f.type.startsWith("image/")) return true;
+  return /\.(jpe?g|png|gif|webp|heic|heif|bmp|tif{1,2})$/i.test(f.name);
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
 
 export default function Home() {
   const [problem, setProblem] = useState("");
@@ -9,11 +21,66 @@ export default function Home() {
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [uploadInfo, setUploadInfo] = useState("");
+  const [dragActive, setDragActive] = useState(false);
+  const dragDepth = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const onFiles = useCallback((list: FileList | null) => {
-    if (!list?.length) return;
-    setFiles((prev) => [...prev, ...Array.from(list)]);
+  const addFiles = useCallback((incoming: File[]) => {
+    const images = incoming.filter(isImageFile);
+    if (images.length === 0 && incoming.length > 0) {
+      setError("Only image files are accepted (e.g. PNG, JPEG, HEIC).");
+      return;
+    }
+    if (images.length) {
+      setError("");
+      setFiles((prev) => [...prev, ...images]);
+    }
   }, []);
+
+  const onFiles = useCallback(
+    (list: FileList | null) => {
+      if (!list?.length) return;
+      addFiles(Array.from(list));
+    },
+    [addFiles],
+  );
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth.current += 1;
+    setDragActive(true);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepth.current -= 1;
+    if (dragDepth.current <= 0) {
+      dragDepth.current = 0;
+      setDragActive(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragDepth.current = 0;
+      setDragActive(false);
+      const dt = e.dataTransfer;
+      if (!dt?.files?.length) return;
+      addFiles(Array.from(dt.files));
+    },
+    [addFiles],
+  );
 
   const removeFile = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
@@ -22,6 +89,7 @@ export default function Home() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setUploadInfo("");
     setResult("");
     if (!files.length) {
       setError("Add at least one image of the student work.");
@@ -33,10 +101,23 @@ export default function Home() {
     }
     setLoading(true);
     try {
+      const { files: readyFiles, warnings } = await prepareImagesForUpload(files);
+      if (warnings.length) {
+        setUploadInfo(warnings.join("\n"));
+      }
+
+      const totalBytes = readyFiles.reduce((n, f) => n + f.size, 0);
+      if (totalBytes > 4_200_000) {
+        setError(
+          "Prepared images are still too large for one request (~4 MB on many hosts). Remove a page or lower scan resolution.",
+        );
+        return;
+      }
+
       const fd = new FormData();
       fd.set("problem", problem);
       fd.set("rubric", rubric);
-      for (const f of files) fd.append("images", f);
+      for (const f of readyFiles) fd.append("images", f);
       const res = await fetch("/api/grade", { method: "POST", body: fd });
       const data: { text?: string; error?: string } = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -72,30 +153,55 @@ export default function Home() {
           <h2 id="upload-heading" className="text-sm font-semibold uppercase tracking-wider text-slate-500">
             Student work
           </h2>
-          <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-600 bg-slate-900/40 px-4 py-10 transition hover:border-sky-500/50 hover:bg-slate-900/60">
+          <div
+            className={`mt-4 flex flex-col items-center justify-center rounded-xl border border-dashed px-4 py-10 transition ${
+              dragActive
+                ? "border-sky-400 bg-sky-950/40 ring-2 ring-sky-500/30"
+                : "border-slate-600 bg-slate-900/40 hover:border-sky-500/50 hover:bg-slate-900/60"
+            }`}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/*"
               multiple
               className="sr-only"
+              aria-label="Choose image files"
               onChange={(e) => {
                 onFiles(e.target.files);
                 e.target.value = "";
               }}
             />
-            <span className="text-center text-sm text-slate-300">
-              Drop images here or <span className="text-sky-400">browse</span>
-            </span>
-            <span className="mt-1 text-xs text-slate-500">PNG, JPEG, HEIC as supported by your browser</span>
-          </label>
+            <p className="text-center text-sm text-slate-300">
+              Drop images here{" "}
+              <span className="text-slate-500">or</span>{" "}
+              <button
+                type="button"
+                className="text-sky-400 underline decoration-sky-500/40 underline-offset-2 hover:text-sky-300"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                browse
+              </button>
+            </p>
+            <p className="mt-1 text-center text-xs text-slate-500">
+              Images are resized to JPEG before upload (clearer for grading and smaller uploads).
+            </p>
+          </div>
           {files.length > 0 && (
             <ul className="mt-3 space-y-2">
               {files.map((f, i) => (
                 <li
                   key={`${f.name}-${i}`}
-                  className="flex items-center justify-between gap-2 rounded-lg bg-slate-900/50 px-3 py-2 text-sm text-slate-300"
+                  className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/50 px-3 py-2 text-sm text-slate-300"
                 >
-                  <span className="truncate">{f.name}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">{f.name}</div>
+                    <div className="text-xs text-slate-500">{formatFileSize(f.size)}</div>
+                  </div>
                   <button
                     type="button"
                     onClick={() => removeFile(i)}
@@ -137,6 +243,12 @@ export default function Home() {
             className="mt-2 w-full resize-y rounded-xl border border-[var(--border)] bg-slate-950/50 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-sky-500/60 focus:outline-none focus:ring-1 focus:ring-sky-500/40"
           />
         </section>
+
+        {uploadInfo && (
+          <p className="rounded-xl border border-amber-900/50 bg-amber-950/25 px-4 py-3 text-sm text-amber-100 whitespace-pre-wrap">
+            {uploadInfo}
+          </p>
+        )}
 
         {error && (
           <p className="rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-sm text-rose-200" role="alert">

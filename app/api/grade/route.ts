@@ -11,6 +11,34 @@ function fileToDataUrl(buffer: Buffer, mime: string): string {
   return `data:${mime};base64,${b64}`;
 }
 
+/** Browsers often send `application/octet-stream` or empty type for camera rolls / exports. */
+function inferImageMime(file: File): string {
+  const raw = (file.type || "").trim().toLowerCase();
+  if (raw.startsWith("image/")) {
+    return file.type.trim();
+  }
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const byExt: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    gif: "image/gif",
+    heic: "image/heic",
+    heif: "image/heif",
+    bmp: "image/bmp",
+    tif: "image/tiff",
+    tiff: "image/tiff",
+  };
+  if (ext && byExt[ext]) {
+    return byExt[ext];
+  }
+  if (raw === "application/octet-stream" || raw === "binary/octet-stream" || raw === "") {
+    return "image/jpeg";
+  }
+  return "image/jpeg";
+}
+
 export async function POST(request: Request) {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
@@ -22,8 +50,13 @@ export async function POST(request: Request) {
   let formData: FormData;
   try {
     formData = await request.formData();
-  } catch {
-    return NextResponse.json({ error: "Invalid form data." }, { status: 400 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    const hint =
+      msg.includes("size") || msg.includes("limit") || msg.includes("exceeded")
+        ? " Request may be too large — use fewer or smaller photos."
+        : "";
+    return NextResponse.json({ error: `Could not read upload.${hint}` }, { status: 400 });
   }
 
   const problem = String(formData.get("problem") ?? "").trim();
@@ -50,10 +83,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const mime = file.type || "image/jpeg";
-    if (!mime.startsWith("image/")) {
-      return NextResponse.json({ error: "Only image uploads are supported." }, { status: 400 });
-    }
+    const mime = inferImageMime(file);
     const buf = Buffer.from(await file.arrayBuffer());
     imageParts.push({
       type: "image_url",
